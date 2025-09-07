@@ -1,0 +1,44 @@
+{
+  "compilerOptions": {
+    "target": "ES2017",
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "preserve", //preserve was there before
+    "incremental": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "paths": {
+      "@/*": [
+        "./*"
+      ]
+    }
+  },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    "app/(auth)/layout.js",
+    "app/(main)/ai-cover-letter/_components/cover-letter-generator.tsx",
+    "app/(main)/ai-cover-letter/_components/cover-letter-list.tsx",
+    "app/(main)/ai-cover-letter/_components/cover-letter-preview.tsx"
+, "app/(main)/resume/_components/entry-form.jsx", "app/(main)/resume/_components/resume-builder.jsx", "app/(main)/ai-cover-letter/[id]/page.jsx", "actions/interview.js"  ],
+  "exclude": [
+    "node_modules"
+  ]
+}
