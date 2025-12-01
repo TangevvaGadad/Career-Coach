@@ -33,7 +33,7 @@ interface IndustryInsightJSON {
 export const generateIndustryInsights = inngest.createFunction(
   {
       name: "Generate Industry Insights",
-      id: ""
+      id: "generate-industry-insights"
   },
   { cron: "0 0 * * 0" }, // Every Sunday at midnight
   async ({ step }) => {
@@ -93,6 +93,115 @@ export const generateIndustryInsights = inngest.createFunction(
           });
       } catch (error) {
         console.error(`Failed to parse JSON for industry "${industry}":`, error);
+      }
+    }
+  }
+);
+
+export const fetchJobOpportunities = inngest.createFunction(
+  {
+    name: "Fetch Job Opportunities",
+    id: "fetch-job-opportunities"
+  },
+  { cron: "0 6 * * *" }, // Every day at 6 AM
+  async ({ step }) => {
+    const industries = await step.run("Fetch industries", async () => {
+      return await db.industryInsight.findMany({
+        select: { industry: true },
+      });
+    });
+
+    for (const { industry } of industries) {
+      const prompt = `
+        Search for current job opportunities and internships in the ${industry} industry from platforms like Internshala, Unstop, LinkedIn, Indeed, and other job portals. 
+        
+        Return the data in ONLY the following JSON format without any additional notes or explanations:
+        {
+          "jobs": [
+            {
+              "title": "string",
+              "company": "string", 
+              "location": "string",
+              "type": "internship" | "full-time" | "part-time" | "contract",
+              "description": "string",
+              "requirements": ["requirement1", "requirement2"],
+              "skills": ["skill1", "skill2"],
+              "salary": "string (e.g., '₹15,000 - ₹25,000/month' or 'Not specified')",
+              "experience": "string (e.g., '0-2 years', 'Fresher', '2-5 years')",
+              "platform": "internshala" | "unstop" | "linkedin" | "indeed" | "other",
+              "url": "string (job posting URL)",
+              "postedDate": "YYYY-MM-DD",
+              "deadline": "YYYY-MM-DD (if available, otherwise null)"
+            }
+          ]
+        }
+        
+        IMPORTANT: 
+        - Return ONLY the JSON. No additional text, notes, or markdown formatting.
+        - Include at least 8-10 current job opportunities
+        - Focus on internships and entry-level positions for students
+        - Include a mix of different job types (internships, full-time, part-time)
+        - Make sure URLs are realistic job posting URLs
+        - Use current dates for postedDate
+        - Include diverse companies and locations
+        - Ensure all required fields are populated
+      `;
+
+      const res = await step.ai.wrap(
+        "gemini",
+        async (p) => {
+          return await model.generateContent(p);
+        },
+        prompt
+      );
+
+      const part = res.response.candidates?.[0]?.content?.parts?.[0];
+      const text = typeof part === "object" && "text" in part ? part.text : "";
+      const cleanedText = text.replace(/```(?:json)?\n?/g, "").trim();
+
+      try {
+        const jobData = JSON.parse(cleanedText);
+        
+        // Deactivate old jobs for this industry
+        await step.run(`Deactivate old jobs for ${industry}`, async () => {
+          await db.jobOpportunity.updateMany({
+            where: {
+              industry: industry,
+              isActive: true,
+            },
+            data: {
+              isActive: false,
+            },
+          });
+        });
+
+        // Create new job opportunities
+        if (jobData.jobs && Array.isArray(jobData.jobs)) {
+          await step.run(`Create new jobs for ${industry}`, async () => {
+            for (const job of jobData.jobs) {
+              await db.jobOpportunity.create({
+                data: {
+                  title: job.title,
+                  company: job.company,
+                  location: job.location,
+                  type: job.type,
+                  industry: industry,
+                  description: job.description,
+                  requirements: job.requirements || [],
+                  skills: job.skills || [],
+                  salary: job.salary,
+                  experience: job.experience,
+                  platform: job.platform,
+                  url: job.url,
+                  postedDate: new Date(job.postedDate),
+                  deadline: job.deadline ? new Date(job.deadline) : null,
+                },
+              });
+            }
+          });
+        }
+      } catch (error) {
+        console.error(`Failed to parse job data for industry "${industry}":`, error);
       }
     }
   }

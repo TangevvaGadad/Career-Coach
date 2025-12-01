@@ -97,3 +97,29 @@ model IndustryInsight {
 
   @@index([industry])
 }
+
+model JobOpportunity {
+  id            String    @id @default(cuid())
+  title         String    // Job title
+  company       String    // Company name
+  location      String    // Job location
+  type          String    // "internship", "full-time", "part-time", "contract"
+  industry      String    // Industry this job belongs to
+  description   String    @db.Text // Job description
+  requirements  String[]  // Array of job requirements
+  skills        String[]  // Required skills
+  salary        String?   // Salary range (if available)
+  experience    String?   // Experience level required
+  platform      String    // "internshala", "unstop", "linkedin", etc.
+  url           String    // Job posting URL
+  postedDate    DateTime  // When the job was posted
+  deadline      DateTime? // Application deadline
+  isActive      Boolean   @default(true) // Whether the job is still active
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([industry])
+  @@index([type])
+  @@index([platform])
+  @@index([isActive])
+}

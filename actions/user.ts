@@ -97,6 +97,7 @@ export async function getUserOnboardingStatus() {
 
     return {
       isOnboarded: !!userWithIndustry?.industry,
+      user: userWithIndustry,
     };
   } catch (error) {
     console.error("Error checking onboarding status:", error);
