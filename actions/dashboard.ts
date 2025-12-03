@@ -5,7 +5,40 @@ import { auth } from "@clerk/nextjs/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+// Helper function to try multiple models with fallback
+async function generateWithModelFallback(prompt: string) {
+  const modelsToTry = [
+    "gemini-1.5-flash",
+    "gemini-1.5-pro",
+    "gemini-pro",
+    "gemini-2.0-flash-exp"
+  ];
+
+  for (const modelName of modelsToTry) {
+    try {
+      const model = genAI.getGenerativeModel({ model: modelName });
+      const result = await model.generateContent(prompt);
+      const response = result.response;
+      const text = response.text();
+      console.log(`✅ Successfully used model: ${modelName}`);
+      return text;
+    } catch (error: unknown) {
+      // If it's a 404, try the next model
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorStatus = (error as { status?: number })?.status;
+      if (errorMessage.includes('404') || errorStatus === 404) {
+        console.log(`⚠️ Model ${modelName} not available, trying next...`);
+        continue;
+      }
+      // For other errors, log and try next model
+      console.error(`Error with model ${modelName}:`, error);
+      continue;
+    }
+  }
+
+  throw new Error("All Gemini models failed");
+}
 
 export const generateAIInsights = async (industry:any) => {
   const prompt = `
@@ -28,12 +61,23 @@ export const generateAIInsights = async (industry:any) => {
           Include at least 5 skills and trends.
         `;
 
-  const result = await model.generateContent(prompt);
-  const response = result.response;
-  const text = response.text();
-  const cleanedText = text.replace(/```(?:json)?\n?/g, "").trim();
-
-  return JSON.parse(cleanedText);
+  try {
+    const text = await generateWithModelFallback(prompt);
+    const cleanedText = text.replace(/```(?:json)?\n?/g, "").trim();
+    return JSON.parse(cleanedText);
+  } catch (error) {
+    console.error("Error generating AI insights:", error);
+    // Return default fallback data
+    return {
+      salaryRanges: [],
+      growthRate: 0,
+      demandLevel: "Medium",
+      topSkills: [],
+      marketOutlook: "Neutral",
+      keyTrends: [],
+      recommendedSkills: []
+    };
+  }
 };
 
 export async function getIndustryInsights() {
@@ -157,11 +201,8 @@ export const generateJobOpportunities = async (industry: string) => {
   
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      const result = await model.generateContent(prompt);
-      const response = result.response;
-      const text = response.text();
+      const text = await generateWithModelFallback(prompt);
       const cleanedText = text.replace(/```(?:json)?\n?/g, "").trim();
-
       return JSON.parse(cleanedText);
     } catch (error) {
       lastError = error;

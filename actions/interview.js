@@ -5,7 +5,37 @@ import { auth } from "@clerk/nextjs/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+// Helper function to try multiple models with fallback
+async function generateWithModelFallback(prompt) {
+  const modelsToTry = [
+    "gemini-1.5-flash",
+    "gemini-1.5-pro",
+    "gemini-pro",
+    "gemini-2.0-flash-exp"
+  ];
+
+  for (const modelName of modelsToTry) {
+    try {
+      const model = genAI.getGenerativeModel({ model: modelName });
+      const result = await model.generateContent(prompt);
+      const content = result.response.text().trim();
+      console.log(`✅ Successfully used model: ${modelName}`);
+      return content;
+    } catch (error) {
+      // If it's a 404, try the next model
+      if (error?.message?.includes('404') || error?.status === 404) {
+        console.log(`⚠️ Model ${modelName} not available, trying next...`);
+        continue;
+      }
+      // For other errors, log and try next model
+      console.error(`Error with model ${modelName}:`, error);
+      continue;
+    }
+  }
+
+  throw new Error("All Gemini models failed");
+}
 
 export async function generateQuiz() {
   const { userId } = await auth();
@@ -44,9 +74,7 @@ export async function generateQuiz() {
   `;
 
   try {
-    const result = await model.generateContent(prompt);
-    const response = result.response;
-    const text = response.text();
+    const text = await generateWithModelFallback(prompt);
     const cleanedText = text.replace(/```(?:json)?\n?/g, "").trim();
     const quiz = JSON.parse(cleanedText);
 
@@ -100,9 +128,7 @@ export async function saveQuizResult(questions, answers, score) {
     `;
 
     try {
-      const tipResult = await model.generateContent(improvementPrompt);
-
-      improvementTip = tipResult.response.text().trim();
+      improvementTip = await generateWithModelFallback(improvementPrompt);
       console.log(improvementTip);
     } catch (error) {
       console.error("Error generating improvement tip:", error);

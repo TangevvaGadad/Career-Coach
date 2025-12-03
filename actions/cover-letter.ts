@@ -5,7 +5,49 @@ import { auth } from "@clerk/nextjs/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+// Helper function to try multiple models with fallback + basic rate-limit handling
+async function generateWithModelFallback(prompt: string) {
+  const modelsToTry = [
+    "gemini-1.5-flash",
+    "gemini-1.5-pro",
+    "gemini-pro",
+    "gemini-2.0-flash-exp"
+  ];
+
+  for (const modelName of modelsToTry) {
+    try {
+      const model = genAI.getGenerativeModel({ model: modelName });
+      const result = await model.generateContent(prompt);
+      const content = result.response.text().trim();
+      console.log(`✅ Successfully used model: ${modelName}`);
+      return content;
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorStatus = (error as { status?: number })?.status;
+
+      // If it's a 404, try the next model
+      if (errorMessage.includes('404') || errorStatus === 404) {
+        console.log(`⚠️ Model ${modelName} not available, trying next...`);
+        continue;
+      }
+
+      // If it's a 429 (rate limited), wait briefly then try the NEXT model
+      if (errorMessage.includes('429') || errorStatus === 429) {
+        const delayMs = 2000;
+        console.warn(`⏳ Rate limited on model ${modelName} (429). Waiting ${delayMs}ms before trying another model...`);
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+        continue;
+      }
+
+      // For other errors, log and try next model
+      console.error(`Error with model ${modelName}:`, error);
+      continue;
+    }
+  }
+
+  throw new Error("All Gemini models failed");
+}
 
 // Define the input type
 interface CoverLetterInput {
@@ -50,8 +92,7 @@ export async function generateCoverLetter(data: CoverLetterInput) {
   `;
 
   try {
-    const result = await model.generateContent(prompt);
-    const content = result.response.text().trim();
+    const content = await generateWithModelFallback(prompt);
 
     const coverLetter = await db.coverLetter.create({
       data: {
@@ -65,9 +106,39 @@ export async function generateCoverLetter(data: CoverLetterInput) {
     });
 
     return coverLetter;
-  } catch (error: any) {
-    console.error("Error generating cover letter:", error.message);
-    throw new Error("Failed to generate cover letter");
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error("Error generating cover letter with Gemini:", errorMessage);
+
+    // Graceful fallback: generate a simple template-based cover letter
+    const fallbackContent = `
+Dear Hiring Manager,
+
+I am writing to express my interest in the ${data.jobTitle} role at ${data.companyName}. With a background in ${user.industry ?? "your industry"} and experience of ${user.experience ?? "relevant projects and internships"}, I have developed skills in ${(user.skills ?? []).join(", ") || "relevant technical and professional skills"} that align well with this opportunity.
+
+In my recent work, I have been involved in:
+- ${user.bio || "handling responsibilities that strengthened my problem-solving, collaboration, and learning mindset."}
+
+I am excited about the possibility of contributing to ${data.companyName} and growing with your team. I would welcome the opportunity to discuss how my background can add value to this position.
+
+Thank you for considering my application.
+
+Sincerely,
+[Your Name]
+`.trim();
+
+    const coverLetter = await db.coverLetter.create({
+      data: {
+        content: fallbackContent,
+        jobDescription: data.jobDescription,
+        companyName: data.companyName,
+        jobTitle: data.jobTitle,
+        status: "completed",
+        userId: user.id,
+      },
+    });
+
+    return coverLetter;
   }
 }
 

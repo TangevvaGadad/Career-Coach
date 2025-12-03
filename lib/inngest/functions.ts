@@ -9,7 +9,40 @@ if (!apiKey) {
 }
 
 const genAI = new GoogleGenerativeAI(apiKey);
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+// Helper function to try multiple models with fallback
+async function generateWithModelFallback(prompt: string): Promise<string> {
+  const modelsToTry = [
+    "gemini-1.5-flash",
+    "gemini-1.5-pro",
+    "gemini-pro",
+    "gemini-2.0-flash-exp"
+  ];
+
+  for (const modelName of modelsToTry) {
+    try {
+      const model = genAI.getGenerativeModel({ model: modelName });
+      const result = await model.generateContent(prompt);
+      const response = result.response;
+      const text = response.text();
+      console.log(`✅ Successfully used model: ${modelName}`);
+      return text;
+    } catch (error: unknown) {
+      // If it's a 404, try the next model
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorStatus = (error as { status?: number })?.status;
+      if (errorMessage.includes('404') || errorStatus === 404) {
+        console.log(`⚠️ Model ${modelName} not available, trying next...`);
+        continue;
+      }
+      // For other errors, log and try next model
+      console.error(`Error with model ${modelName}:`, error);
+      continue;
+    }
+  }
+
+  throw new Error("All Gemini models failed");
+}
 
 // Define the structure of the expected response
 interface SalaryRange {
@@ -64,16 +97,10 @@ export const generateIndustryInsights = inngest.createFunction(
         Include at least 5 skills and trends.
       `;
 
-      const res = await step.ai.wrap(
-        "gemini",
-        async (p) => {
-          return await model.generateContent(p);
-        },
-        prompt
-      );
+      const text = await step.run(`Generate insights for ${industry}`, async () => {
+        return await generateWithModelFallback(prompt);
+      });
 
-      const part = res.response.candidates?.[0]?.content?.parts?.[0];
-      const text = typeof part === "object" && "text" in part ? part.text : "";
       const cleanedText = text.replace(/```(?:json)?\n?/g, "").trim();
       
 
@@ -147,16 +174,10 @@ export const fetchJobOpportunities = inngest.createFunction(
         - Ensure all required fields are populated
       `;
 
-      const res = await step.ai.wrap(
-        "gemini",
-        async (p) => {
-          return await model.generateContent(p);
-        },
-        prompt
-      );
+      const text = await step.run(`Generate insights for ${industry}`, async () => {
+        return await generateWithModelFallback(prompt);
+      });
 
-      const part = res.response.candidates?.[0]?.content?.parts?.[0];
-      const text = typeof part === "object" && "text" in part ? part.text : "";
       const cleanedText = text.replace(/```(?:json)?\n?/g, "").trim();
 
       try {
