@@ -34,7 +34,6 @@ export default function page() {
       transition: {
         delay: i * 0.2,
         duration: 0.6,
-        ease: "easeOut",
       },
     }),
   };
@@ -47,7 +46,6 @@ export default function page() {
       transition: {
         delay: i * 0.2,
         duration: 0.6,
-        ease: "easeOut",
       },
     }),
   };
