@@ -15,7 +15,7 @@
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "jsx": "preserve", //preserve was there before
+    "jsx": "react-jsx", //preserve was there before
     "incremental": true,
     "plugins": [
       {
@@ -36,8 +36,13 @@
     "app/(auth)/layout.js",
     "app/(main)/ai-cover-letter/_components/cover-letter-generator.tsx",
     "app/(main)/ai-cover-letter/_components/cover-letter-list.tsx",
-    "app/(main)/ai-cover-letter/_components/cover-letter-preview.tsx"
-, "app/(main)/resume/_components/entry-form.jsx", "app/(main)/resume/_components/resume-builder.jsx", "app/(main)/ai-cover-letter/[id]/page.jsx", "actions/interview.js"  ],
+    "app/(main)/ai-cover-letter/_components/cover-letter-preview.tsx",
+    "app/(main)/resume/_components/entry-form.jsx",
+    "app/(main)/resume/_components/resume-builder.jsx",
+    "app/(main)/ai-cover-letter/[id]/page.jsx",
+    "actions/interview.js",
+    ".next/dev/types/**/*.ts"
+  ],
   "exclude": [
     "node_modules"
   ]
